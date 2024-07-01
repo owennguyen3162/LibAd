@@ -1,5 +1,5 @@
-import { View, Text, Pressable } from 'react-native';
-import React, { useEffect } from 'react';
+import { View, Text, Pressable, Button } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     AdEventType,
     InterstitialAd,
@@ -7,96 +7,82 @@ import {
 } from 'react-native-google-mobile-ads';
 
 interface IInterstitialAds {
-    adUnitId: string;
-    cbNextScreen: () => void;
-    timeOutDisplayAd: number;
-    preLoad: boolean;
+    adUnitId?: string;
+    onAdClose: () => void;
+    adDisplayTimeout: number;
+    preload?: boolean;
 }
 
-let timeClicked = new Date().getTime()
-
 export const InterstitialAds = (props: IInterstitialAds) => {
-    const { adUnitId, cbNextScreen, timeOutDisplayAd, preLoad } =
-        props;
 
-    const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
+    const { adUnitId = TestIds.INTERSTITIAL, onAdClose, adDisplayTimeout, preload = true } = props;
+    const [paidInterAds, setPaidInterAds] = React.useState<any>({});
+    const interstitial = useRef(InterstitialAd.createForAdRequest(__DEV__ ? TestIds.INTERSTITIAL : adUnitId, {
         keywords: ['fashion', 'clothing'],
-    });
+    })).current
+    let lastAdShownTime = useRef(new Date().getTime()).current;
+
+    React.useEffect(() => {
+        if (Object.keys(paidInterAds).length != 0) {
+            //log revenue event
+            //log tracking event
+        }
+    }, [paidInterAds]);
 
     useEffect(() => {
-        const interstitialLoaded = interstitial.addAdEventListener(
-            AdEventType.LOADED,
-            () => {
-                console.log('Loaded', adUnitId);
-                interstitial.show();
-                timeClicked = new Date().getTime()
-            },
-        );
+        const handleAdLoaded = interstitial.addAdEventListener(AdEventType.LOADED, () => {
+            interstitial.show();
+            lastAdShownTime = new Date().getTime();
+        });
 
-        const interstitialClicked = interstitial.addAdEventListener(
-            AdEventType.CLICKED,
-            () => { },
-        );
+        const handleAdClicked = interstitial.addAdEventListener(AdEventType.CLICKED, () => {
+        });
 
-        const interstitialClosed = interstitial.addAdEventListener(
-            AdEventType.CLOSED,
-            () => {
-                cbNextScreen?.();
-            },
-        );
+        const handleAdClosed = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+            onAdClose?.();
+        });
 
-        const interstitialError = interstitial.addAdEventListener(
-            AdEventType.ERROR,
-            error => {
-                console.log(error);
-            },
-        );
+        const handleAdError = interstitial.addAdEventListener(AdEventType.ERROR, (error) => {
+        });
 
-        const interstitialOpened = interstitial.addAdEventListener(
-            AdEventType.OPENED,
-            () => {
-                console.log('OPENED ', adUnitId);
-            },
-        );
+        const handleAdOpened = interstitial.addAdEventListener(AdEventType.OPENED, () => {
+        });
 
-        const interstitialPaid = interstitial.addAdEventListener(
-            AdEventType.PAID,
-            () => { },
-        );
+        const handleAdPaid = interstitial.addAdEventListener(AdEventType.PAID, (paid) => {
+            if (paid) {
+                setPaidInterAds(paid);
+            }
+        });
 
-        // Unsubscribe from events on unmount
         return () => {
-            [
-                interstitialLoaded,
-                interstitialClicked,
-                interstitialClosed,
-                interstitialError,
-                interstitialOpened,
-                interstitialPaid,
-            ].forEach(e => e?.());
+            handleAdLoaded?.();
+            handleAdClicked?.();
+            handleAdClosed?.();
+            handleAdError?.();
+            handleAdOpened?.();
+            handleAdPaid?.();
         };
+
     }, []);
 
-    const _handleShowAd = () => {
-        if ((new Date().getTime() - timeClicked) / 1000 > timeOutDisplayAd) {
+    const showAd = () => {
+        const currentTime = new Date().getTime();
+        if ((currentTime - lastAdShownTime) / 1000 > adDisplayTimeout) {
             if (interstitial.loaded) {
                 interstitial.show();
-                timeClicked = new Date().getTime()
+                lastAdShownTime = currentTime;
             } else {
                 interstitial.load();
             }
         } else {
-            cbNextScreen?.();
+            onAdClose?.();
         }
     };
 
     return (
-        <Pressable
-            onPress={() => {
-                _handleShowAd();
-            }}
-            style={{ marginVertical: 100 }}>
-            <Text>InterstitialAds {adUnitId}</Text>
-        </Pressable>
+        <Button
+            title="Show Interstitial Ad"
+            onPress={showAd}
+        />
     );
 };
